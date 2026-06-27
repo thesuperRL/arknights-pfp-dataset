@@ -74,22 +74,22 @@ jobs:
           echo "⚠️  Each operator page visited only once for efficiency"
           echo ""
           echo "⭐ Scraping 1-star operators..."
-          npm run scrape:skins -- 1
+          npx ts-node scraper.ts 1 --skins
           echo ""
           echo "⭐⭐ Scraping 2-star operators..."
-          npm run scrape:skins -- 2
+          npx ts-node scraper.ts 2 --skins
           echo ""
           echo "⭐⭐⭐ Scraping 3-star operators..."
-          npm run scrape:skins -- 3
+          npx ts-node scraper.ts 3 --skins
           echo ""
           echo "⭐⭐⭐⭐ Scraping 4-star operators..."
-          npm run scrape:skins -- 4
+          npx ts-node scraper.ts 4 --skins
           echo ""
           echo "⭐⭐⭐⭐⭐ Scraping 5-star operators..."
-          npm run scrape:skins -- 5
+          npx ts-node scraper.ts 5 --skins
           echo ""
           echo "⭐⭐⭐⭐⭐⭐ Scraping 6-star operators..."
-          npm run scrape:6star --skins
+          npx ts-node scraper.ts 6 --skins
           echo ""
           echo "✅ All rarities scraped (defaults + skins)!"
         env:
