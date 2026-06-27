@@ -426,7 +426,7 @@ class ArknightsScraper {
       '#mw-content-text table'
     ];
 
-    let table: cheerio.Cheerio<any> | null = null;
+    let table: cheerio.Cheerio | null = null;
     let foundSelector = '';
     
     // Try all selectors
@@ -492,7 +492,7 @@ class ArknightsScraper {
   /**
    * Attempts to parse a table for operator data
    */
-  private tryParseTable(table: cheerio.Cheerio<any>, rarity: number): OperatorData[] {
+  private tryParseTable(table: cheerio.Cheerio, rarity: number): OperatorData[] {
     const $ = cheerio.load('');
     const operators: OperatorData[] = [];
 
@@ -523,7 +523,7 @@ class ArknightsScraper {
     });
 
     // Parse table rows (skip header row)
-    table.find('tr').each((index, row) => {
+    table.find('tr').each((index: number, row: any) => {
       if (index === 0) return; // Skip header
 
       const $row = $(row);
@@ -662,7 +662,7 @@ class ArknightsScraper {
   /**
    * Alternative extraction method for different page layouts
    */
-  private extractOperatorsAlternative($: cheerio.CheerioAPI, rarity: number): OperatorData[] {
+  private extractOperatorsAlternative($: any, rarity: number): OperatorData[] {
     const operators: OperatorData[] = [];
 
     // Try finding operator cards or list items
@@ -1124,7 +1124,7 @@ class ArknightsScraper {
     
     try {
       console.log(`      🌐 Fetching: ${operatorPageUrl}`);
-      const html = await this.fetchHtmlSafe(operatorPageUrl);
+      const html = await this.fetchHtmlWithRetry(operatorPageUrl);
       const $ = cheerio.load(html);
       
       console.log(`      🔍 Scanning page for skin images...`);
