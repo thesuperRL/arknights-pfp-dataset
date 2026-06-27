@@ -1,37 +1,81 @@
 # Arknights Operator Profile Pictures Dataset
 
-This repository contains all operator profile pictures crawled from the Arknights Wiki.
+This repository contains all operator profile pictures crawled from the Arknights Wiki, plus the scraper to keep them updated.
 
 ## Structure
 
+```
+arknights-pfp-dataset/
+├── scraper.ts           # Web scraper for downloading operator images
+├── package.json         # Dependencies for the scraper
+├── data/               # Temporary JSON data (gitignored)
+├── *.png               # 420+ operator profile pictures
+└── README.md
+```
+
 All operator profile pictures are stored in the root directory, named as `{operator-id}.png` (e.g., `silverash.png`, `amiya.png`).
 
-## Usage
+## Setup
 
-This repository is used as a git submodule in the main arknights-website repository at `public/images/operators/`.
+Install dependencies:
+
+```bash
+npm install
+```
 
 ## Updating Images
 
-Images are automatically downloaded and updated by the scraper in the main website repository:
-
-1. From the website repo, run the scraper: `npm run scrape:6star` (or other rarity)
-2. New images are saved directly to this submodule directory
-3. Commit and push changes in this dataset repo
-4. Update the submodule reference in the website repo
-
-## Workflow for Manual Updates
+Run the scraper to download new operator images:
 
 ```bash
-# In the arknights-pfp-dataset directory
-git add .
-git commit -m "Add/update operator images"
-git push
+# Scrape all 6-star operators (most common)
+npm run scrape:6star
 
-# In the arknights-website directory
-cd public/images/operators
-git pull
-cd ../../..
-git add public/images/operators
-git commit -m "Update operator images submodule"
+# Or scrape other rarities
+npm run scrape:1star
+npm run scrape:2star
+npm run scrape:3star
+npm run scrape:4star
+npm run scrape:5star
+
+# Or specify rarity directly
+npm run scrape -- 6
+```
+
+The scraper will:
+1. Fetch operator data from Arknights Wiki
+2. Download profile images that don't already exist
+3. Skip images that are already downloaded
+4. Save images to the root directory as `{operator-id}.png`
+
+## Committing Updates
+
+After scraping new images:
+
+```bash
+git add *.png
+git commit -m "Add new operator images"
 git push
 ```
+
+## Usage in Other Projects
+
+This repository is used as a git submodule in the [arknights-website](https://github.com/thesuperRL/arknights-website) repository at `public/images/operators/`.
+
+To use as a submodule:
+
+```bash
+git submodule add git@github.com:thesuperRL/arknights-pfp-dataset.git path/to/images
+```
+
+## Dataset Info
+
+- **Total Images**: 420+ operator profile pictures
+- **Source**: [Arknights Wiki](https://arknights.wiki.gg)
+- **Format**: PNG
+- **Size**: ~7.2MB total
+- **Naming**: Lowercase operator ID (e.g., `silverash.png`, `ch_en.png`)
+
+## License
+
+MIT
