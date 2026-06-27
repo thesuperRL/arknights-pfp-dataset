@@ -78,19 +78,40 @@ jobs:
       - name: Scrape operator images (defaults only)
         if: ${{ !inputs.include_skins }}
         run: |
+          echo "🚀 Starting operator image scrape (defaults only)..."
+          echo ""
+          echo "⭐ Scraping 1-star operators..."
           npm run scrape:1star
+          echo ""
+          echo "⭐⭐ Scraping 2-star operators..."
           npm run scrape:2star
+          echo ""
+          echo "⭐⭐⭐ Scraping 3-star operators..."
           npm run scrape:3star
+          echo ""
+          echo "⭐⭐⭐⭐ Scraping 4-star operators..."
           npm run scrape:4star
+          echo ""
+          echo "⭐⭐⭐⭐⭐ Scraping 5-star operators..."
           npm run scrape:5star
+          echo ""
+          echo "⭐⭐⭐⭐⭐⭐ Scraping 6-star operators..."
           npm run scrape:6star
+          echo ""
+          echo "✅ All rarities scraped!"
         env:
           NODE_ENV: production
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: false
 
       - name: Scrape operator images with skins
         if: ${{ inputs.include_skins }}
-        run: npm run scrape:all-skins
+        run: |
+          echo "🚀 Starting operator image scrape (with all skins)..."
+          echo "⚠️  This may take a while..."
+          echo ""
+          npm run scrape:all-skins
+          echo ""
+          echo "✅ All skins scraped!"
         env:
           NODE_ENV: production
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: false
@@ -98,21 +119,44 @@ jobs:
       - name: Check for changes
         id: verify-changed-files
         run: |
+          echo "📊 Checking for new or updated images..."
+          echo ""
           git status --short
-          if [ -n "$(git status --porcelain default/ all/ 2>/dev/null)" ]; then
+          echo ""
+          
+          CHANGED_FILES=$(git status --porcelain default/ all/ 2>/dev/null)
+          if [ -n "$CHANGED_FILES" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Files changed, will commit"
+            echo "✅ Files changed, will commit:"
+            echo "$CHANGED_FILES"
+            
+            NEW_COUNT=$(echo "$CHANGED_FILES" | grep "^??" | wc -l)
+            MODIFIED_COUNT=$(echo "$CHANGED_FILES" | grep "^ M" | wc -l)
+            echo ""
+            echo "📈 New files: $NEW_COUNT"
+            echo "📝 Modified files: $MODIFIED_COUNT"
           else
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No changes detected"
+            echo "⏭️  No changes detected - all images are up to date"
           fi
 
       - name: Commit and push changes
         if: steps.verify-changed-files.outputs.changed == 'true'
         run: |
+          echo "💾 Committing and pushing changes..."
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          
+          echo "📁 Adding image files..."
           git add default/*.png all/*/*.png 2>/dev/null || true
+          
           DATE=$(date +'%Y-%m-%d')
-          git commit -m "chore: update operator images from monthly scrape ($DATE) [skip ci]" || exit 0
+          COMMIT_MSG="chore: update operator images from monthly scrape ($DATE) [skip ci]"
+          echo "📝 Commit message: $COMMIT_MSG"
+          
+          git commit -m "$COMMIT_MSG" || exit 0
+          
+          echo "⬆️  Pushing to remote..."
           git push
+          
+          echo "✅ Changes successfully pushed!"
