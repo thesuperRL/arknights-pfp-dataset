@@ -1074,7 +1074,7 @@ async function main() {
     baseUrl: baseUrl,
     rarity: rarity,
     outputDir: path.join(__dirname, 'data'),
-    imagesDir: __dirname  // Images stored in repo root
+    imagesDir: path.join(__dirname, 'default')  // Images stored in default/ folder
   });
 
   try {
