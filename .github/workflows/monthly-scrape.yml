@@ -1,0 +1,118 @@
+name: Monthly Operator Image Scrape
+
+on:
+  schedule:
+    # Monthly: 1st of every month at 00:00 UTC
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+    inputs:
+      include_skins:
+        description: 'Include all operator skins (not just defaults)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Puppeteer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ca-certificates \
+            fonts-liberation \
+            libasound2t64 \
+            libatk-bridge2.0-0 \
+            libatk1.0-0 \
+            libc6 \
+            libcairo2 \
+            libcups2 \
+            libdbus-1-3 \
+            libexpat1 \
+            libfontconfig1 \
+            libgbm1 \
+            libgcc1 \
+            libglib2.0-0 \
+            libgtk-3-0 \
+            libnspr4 \
+            libnss3 \
+            libpango-1.0-0 \
+            libpangocairo-1.0-0 \
+            libstdc++6 \
+            libx11-6 \
+            libx11-xcb1 \
+            libxcb1 \
+            libxcomposite1 \
+            libxcursor1 \
+            libxdamage1 \
+            libxext6 \
+            libxfixes3 \
+            libxi6 \
+            libxrandr2 \
+            libxrender1 \
+            libxss1 \
+            libxtst6 \
+            lsb-release \
+            wget \
+            xdg-utils
+
+      - name: Scrape operator images (defaults only)
+        if: ${{ !inputs.include_skins }}
+        run: |
+          npm run scrape:1star
+          npm run scrape:2star
+          npm run scrape:3star
+          npm run scrape:4star
+          npm run scrape:5star
+          npm run scrape:6star
+        env:
+          NODE_ENV: production
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: false
+
+      - name: Scrape operator images with skins
+        if: ${{ inputs.include_skins }}
+        run: npm run scrape:all-skins
+        env:
+          NODE_ENV: production
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: false
+
+      - name: Check for changes
+        id: verify-changed-files
+        run: |
+          git status --short
+          if [ -n "$(git status --porcelain default/ all/ 2>/dev/null)" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Files changed, will commit"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          fi
+
+      - name: Commit and push changes
+        if: steps.verify-changed-files.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add default/*.png all/*/*.png 2>/dev/null || true
+          DATE=$(date +'%Y-%m-%d')
+          git commit -m "chore: update operator images from monthly scrape ($DATE) [skip ci]" || exit 0
+          git push

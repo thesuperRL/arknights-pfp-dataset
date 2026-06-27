@@ -101,12 +101,18 @@ The scraper will:
 4. **Default mode**: Save images to `default/` directory as `{operator-id}.png`
 5. **Skins mode** (`--skins`): Also create `all/{operator-id}/` folders with all skins including default
 
+## Automated Updates
+
+This repository has a GitHub Actions workflow that automatically scrapes for new operator images monthly (1st of each month). It can also be triggered manually from the Actions tab with an option to include all skins.
+
 ## Committing Updates
 
 After scraping new images:
 
 ```bash
 git add default/*.png
+# If you scraped skins:
+git add all/*/*.png
 git commit -m "Add new operator images"
 git push
 ```
