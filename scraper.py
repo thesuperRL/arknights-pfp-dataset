@@ -108,36 +108,81 @@ class ArknightsScraper:
         
         operators = []
         
-        # Find the operator table
-        table = soup.find('table', class_='wikitable') or soup.find('table', class_='sortable')
+        # Try multiple table selectors
+        table = None
+        selectors = [
+            ('table', {'class': 'wikitable'}),
+            ('table', {'class': 'sortable'}),
+            ('table', {'class': 'article-table'}),
+            ('table', {}),  # Any table
+        ]
+        
+        for tag, attrs in selectors:
+            tables = soup.find_all(tag, attrs)
+            for t in tables:
+                # Check if table has operator-like data (has images and links)
+                if t.find('img') and t.find('a'):
+                    rows = t.find_all('tr')
+                    if len(rows) > 1:  # Has header + data
+                        table = t
+                        print(f"✅ Found table with {len(rows)} rows")
+                        break
+            if table:
+                break
         
         if not table:
-            print("⚠️  No table found, trying alternative selectors...")
-            table = soup.find('table')
-        
-        if not table:
-            print("❌ Could not find operator table")
+            print("⚠️  No table found, trying card-based layout...")
+            # Try finding operator cards/galleries instead
+            cards = soup.find_all('div', class_='character-card')
+            cards += soup.find_all('div', class_='operator-card')
+            
+            if cards:
+                print(f"📊 Found {len(cards)} operator cards")
+                for card in cards:
+                    name_link = card.find('a')
+                    img = card.find('img')
+                    if name_link and img:
+                        name = name_link.get_text().strip()
+                        image_url = img.get('src') or img.get('data-src')
+                        if name and image_url:
+                            op_id = self.sanitize_filename(name)
+                            operators.append({
+                                'id': op_id,
+                                'name': name,
+                                'rarity': self.rarity,
+                                'imageUrl': image_url
+                            })
+                print(f"✅ Scraped {len(operators)} operators from cards")
+                return operators
+            
+            print("❌ Could not find operator data")
             return operators
         
+        # Parse table rows
         rows = table.find_all('tr')[1:]  # Skip header
-        print(f"📊 Found {len(rows)} operators")
+        print(f"📊 Processing {len(rows)} rows")
         
         for row in rows:
             cells = row.find_all('td')
-            if len(cells) < 2:
+            if len(cells) < 1:
                 continue
             
-            # Extract name
-            name_cell = cells[0]
-            name_link = name_cell.find('a')
-            if not name_link:
-                continue
+            # Look for name and image in any cell
+            name = None
+            image_url = None
             
-            name = name_link.get_text().strip()
-            
-            # Extract image
-            img = name_cell.find('img') or cells[0].find('img')
-            image_url = img.get('src') or img.get('data-src') if img else None
+            for cell in cells:
+                # Try to find name from link
+                if not name:
+                    name_link = cell.find('a', href=True)
+                    if name_link and name_link.get_text().strip():
+                        name = name_link.get_text().strip()
+                
+                # Try to find image
+                if not image_url:
+                    img = cell.find('img')
+                    if img:
+                        image_url = img.get('src') or img.get('data-src')
             
             if name and image_url:
                 op_id = self.sanitize_filename(name)
