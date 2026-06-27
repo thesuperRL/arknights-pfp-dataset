@@ -47,22 +47,60 @@ class ArknightsScraper:
         """Fetch page content using Playwright to bypass Cloudflare"""
         print(f"      🌐 Using browser to fetch: {url}")
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            # Launch with stealth options to avoid detection
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                ]
+            )
             try:
-                page = browser.new_page()
-                page.goto(url, timeout=60000)
-                page.wait_for_load_state("networkidle", timeout=30000)
+                context = browser.new_context(
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    viewport={'width': 1920, 'height': 1080},
+                )
+                page = context.new_page()
+                
+                # Add script to mask automation
+                page.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined})
+                """)
+                
+                page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                
+                # Wait for Cloudflare challenge to complete
+                print(f"      ⏳ Waiting for Cloudflare challenge...")
+                try:
+                    # Wait for a wiki-specific element to appear (means challenge passed)
+                    page.wait_for_selector('table, .mw-parser-output, #content', timeout=30000)
+                    print(f"      ✅ Challenge passed!")
+                except:
+                    # If timeout, just wait a fixed time
+                    print(f"      ⏳ Waiting 10s...")
+                    page.wait_for_timeout(10000)
+                
                 html = page.content()
                 return html
             finally:
                 browser.close()
 
     def fetch_html(self, url: str) -> str:
-        """Fetch HTML with cloudscraper (fast Cloudflare bypass)"""
+        """Fetch HTML with cloudscraper, fallback to browser if needed"""
         print(f"    📡 Fetching: {url}")
         try:
-            # CloudScraper automatically handles Cloudflare challenges (fast!)
+            # CloudScraper handles most Cloudflare challenges
             response = self.scraper.get(url, timeout=30)
+            
+            # Check if we got a challenge page or empty content
+            if (response.status_code == 403 or 
+                'Just a second' in response.text or 
+                'challenge' in response.text.lower() or
+                len(response.text) < 5000):  # suspiciously small for a wiki page
+                print(f"      ⚠️  Got challenge page (status {response.status_code}), using browser...")
+                return self.fetch_with_browser(url)
+            
             return response.text
         except Exception as e:
             print(f"      ⚠️  CloudScraper failed: {e}, trying browser...")
