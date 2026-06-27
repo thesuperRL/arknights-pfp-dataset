@@ -10,7 +10,9 @@
     "scrape:3star": "ts-node scraper.ts 3",
     "scrape:4star": "ts-node scraper.ts 4",
     "scrape:5star": "ts-node scraper.ts 5",
-    "scrape:6star": "ts-node scraper.ts 6"
+    "scrape:6star": "ts-node scraper.ts 6",
+    "scrape:skins": "ts-node scraper.ts 6 --skins",
+    "scrape:all-skins": "ts-node scraper.ts 1 --skins && ts-node scraper.ts 2 --skins && ts-node scraper.ts 3 --skins && ts-node scraper.ts 4 --skins && ts-node scraper.ts 5 --skins && ts-node scraper.ts 6 --skins"
   },
   "repository": {
     "type": "git",

@@ -7,6 +7,10 @@ dist/
 # Scraped data (JSON files are temporary, only images are kept)
 data/
 
+# All skins folder (optional, can be large)
+# Uncomment the line below if you don't want to commit all skins
+# all/
+
 # Logs
 *.log
 npm-debug.log*

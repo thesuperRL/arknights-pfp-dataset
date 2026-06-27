@@ -31,11 +31,19 @@ interface OperatorData {
   internalName?: string; // Internal name/filename
 }
 
+interface SkinData {
+  name: string;      // Display name of the skin
+  imageUrl: string;  // URL to download from
+  filename: string;  // Sanitized filename
+}
+
 interface ScraperConfig {
   baseUrl: string;
   rarity: number;
   outputDir: string;
   imagesDir: string;
+  allSkinsDir?: string;  // Directory for all skins organized by operator
+  scrapeSkins?: boolean;  // Whether to scrape all skins
 }
 
 class ArknightsScraper {
@@ -1060,13 +1068,119 @@ class ArknightsScraper {
       throw error;
     }
   }
+
+  /**
+   * Scrapes all skins/outfits for a given operator from their wiki page
+   */
+  async scrapeOperatorSkins(operatorName: string, operatorId: string): Promise<SkinData[]> {
+    const skins: SkinData[] = [];
+    const operatorPageUrl = `https://arknights.wiki.gg/wiki/${encodeURIComponent(operatorName.replace(/ /g, '_'))}`;
+    
+    try {
+      const html = await this.fetchHtmlSafe(operatorPageUrl);
+      const $ = cheerio.load(html);
+      
+      // Look for avatar/profile images (skins usually have "avatar" in the path)
+      const foundImages = new Set<string>();
+      
+      $('img').each((i, elem) => {
+        const $img = $(elem);
+        let imgUrl = $img.attr('src') || $img.attr('data-src') || '';
+        
+        if (imgUrl && imgUrl.includes('avatar')) {
+          // Clean up URL
+          imgUrl = imgUrl.split('?')[0];
+          if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+          
+          const alt = $img.attr('alt') || '';
+          const skinName = alt || path.basename(imgUrl, path.extname(imgUrl));
+          
+          if (!foundImages.has(imgUrl) && !skinName.toLowerCase().includes('default')) {
+            foundImages.add(imgUrl);
+            skins.push({
+              name: skinName,
+              imageUrl: imgUrl,
+              filename: `${this.sanitizeFilename(skinName)}.png`
+            });
+          }
+        }
+      });
+      
+      return skins;
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /**
+   * Downloads all skins for operators to organized folders
+   */
+  async downloadAllSkins(operators: OperatorData[]): Promise<void> {
+    if (!this.config.allSkinsDir || !this.config.scrapeSkins) {
+      console.log('\n⏭️  Skin scraping disabled (use --skins flag to enable)');
+      return;
+    }
+
+    console.log(`\n📸 Scraping skins for ${operators.length} operators...`);
+    
+    for (let i = 0; i < operators.length; i++) {
+      const operator = operators[i];
+      console.log(`\n[${i + 1}/${operators.length}] Processing ${operator.name}...`);
+      
+      const operatorFolder = path.join(this.config.allSkinsDir, operator.id);
+      if (!fs.existsSync(operatorFolder)) {
+        fs.mkdirSync(operatorFolder, { recursive: true });
+      }
+      
+      // Copy default skin
+      const defaultSkinPath = path.join(operatorFolder, 'default.png');
+      if (!fs.existsSync(defaultSkinPath)) {
+        const defaultImagePath = path.join(this.config.imagesDir, `${operator.id}.png`);
+        if (fs.existsSync(defaultImagePath)) {
+          fs.copyFileSync(defaultImagePath, defaultSkinPath);
+          console.log(`  ✅ Copied default skin`);
+        }
+      } else {
+        console.log(`  ⏭️  Default skin already exists`);
+      }
+      
+      // Scrape and download additional skins
+      const skins = await this.scrapeOperatorSkins(operator.name, operator.id);
+      console.log(`  📸 Found ${skins.length} additional skins`);
+      
+      for (const skin of skins) {
+        const skinPath = path.join(operatorFolder, skin.filename);
+        
+        if (fs.existsSync(skinPath)) {
+          console.log(`  ⏭️  ${skin.filename} already exists`);
+          continue;
+        }
+        
+        try {
+          // Download using modified downloadImage that takes targetDir
+          const imageUrl = skin.imageUrl;
+          const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
+          fs.writeFileSync(skinPath, response.data);
+          console.log(`  ✅ Downloaded ${skin.filename}`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.warn(`  ⚠️  Failed to download ${skin.filename}`);
+        }
+      }
+    }
+    
+    console.log(`\n✅ Skin scraping complete!`);
+  }
 }
 
 /**
  * Main execution function
  */
 async function main() {
-  const rarity = parseInt(process.argv[2]) || 6;
+  const args = process.argv.slice(2);
+  const rarity = parseInt(args[0]) || 6;
+  const scrapeSkins = args.includes('--skins') || args.includes('-s');
+  
   // Use standard URL format for all rarities
   let baseUrl = `https://arknights.wiki.gg/wiki/Operator/${rarity}-star`;
 
@@ -1074,13 +1188,21 @@ async function main() {
     baseUrl: baseUrl,
     rarity: rarity,
     outputDir: path.join(__dirname, 'data'),
-    imagesDir: path.join(__dirname, 'default')  // Images stored in default/ folder
+    imagesDir: path.join(__dirname, 'default'),  // Images stored in default/ folder
+    allSkinsDir: path.join(__dirname, 'all'),    // All skins organized by operator
+    scrapeSkins: scrapeSkins
   });
 
   try {
     const operatorsDict = await scraper.scrape();
     const operatorCount = Object.keys(operatorsDict).length;
     console.log(`\n🎉 Successfully scraped ${operatorCount} ${rarity}-star operators!`);
+    
+    // Download all skins if flag is set
+    if (scrapeSkins) {
+      const operators = Object.values(operatorsDict);
+      await scraper.downloadAllSkins(operators);
+    }
   } catch (error) {
     console.error('Scraping failed:', error);
     process.exit(1);

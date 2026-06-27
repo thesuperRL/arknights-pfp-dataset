@@ -10,13 +10,23 @@ arknights-pfp-dataset/
 │   ├── silverash.png
 │   ├── amiya.png
 │   └── ...
+├── all/                # Complete collection with all skins (optional)
+│   ├── silverash/
+│   │   ├── default.png
+│   │   ├── winter-messenger.png
+│   │   └── ...
+│   ├── amiya/
+│   │   ├── default.png
+│   │   └── ...
+│   └── ...
 ├── scraper.ts          # Web scraper for downloading operator images
 ├── package.json        # Dependencies for the scraper
 ├── data/               # Temporary JSON data (gitignored)
 └── README.md
 ```
 
-All operator profile pictures are stored in the `default/` directory, named as `{operator-id}.png`.
+- **default/**: Quick-access folder with just the default operator images (`{operator-id}.png`)
+- **all/**: Complete collection organized by operator, including all skins/outfits
 
 ## Setup
 
@@ -28,7 +38,9 @@ npm install
 
 ## Updating Images
 
-Run the scraper to download new operator images:
+### Default Images Only
+
+Run the scraper to download new operator default images:
 
 ```bash
 # Scrape all 6-star operators (most common)
@@ -45,11 +57,27 @@ npm run scrape:5star
 npm run scrape -- 6
 ```
 
+### All Skins (Optional)
+
+To download ALL skins/outfits for operators (organizes in `all/` folder):
+
+```bash
+# Scrape 6-star operators with all skins
+npm run scrape:skins
+
+# Or scrape all rarities with skins (takes a while!)
+npm run scrape:all-skins
+
+# Or specify rarity with skins flag
+npm run scrape -- 6 --skins
+```
+
 The scraper will:
 1. Fetch operator data from Arknights Wiki
 2. Download profile images that don't already exist
 3. Skip images that are already downloaded
-4. Save images to the `default/` directory as `{operator-id}.png`
+4. **Default mode**: Save images to `default/` directory as `{operator-id}.png`
+5. **Skins mode** (`--skins`): Also create `all/{operator-id}/` folders with all skins including default
 
 ## Committing Updates
 
