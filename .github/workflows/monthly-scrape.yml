@@ -19,85 +19,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '24'
+          python-version: '3.11'
+          cache: 'pip'
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install Puppeteer dependencies
+      - name: Install Python dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            ca-certificates \
-            fonts-liberation \
-            libasound2t64 \
-            libatk-bridge2.0-0 \
-            libatk1.0-0 \
-            libc6 \
-            libcairo2 \
-            libcups2 \
-            libdbus-1-3 \
-            libexpat1 \
-            libfontconfig1 \
-            libgbm1 \
-            libgcc1 \
-            libglib2.0-0 \
-            libgtk-3-0 \
-            libnspr4 \
-            libnss3 \
-            libpango-1.0-0 \
-            libpangocairo-1.0-0 \
-            libstdc++6 \
-            libx11-6 \
-            libx11-xcb1 \
-            libxcb1 \
-            libxcomposite1 \
-            libxcursor1 \
-            libxdamage1 \
-            libxext6 \
-            libxfixes3 \
-            libxi6 \
-            libxrandr2 \
-            libxrender1 \
-            libxss1 \
-            libxtst6 \
-            lsb-release \
-            wget \
-            xdg-utils
+          pip install -r requirements.txt
+          playwright install chromium
 
       - name: Scrape operator images (defaults and skins in one pass)
         run: |
           echo "🚀 Starting operator image scrape (defaults + skins in single pass)..."
           echo "⚠️  Each operator page visited only once for efficiency"
           echo ""
-          echo "🌐 Using system Chrome: $(which google-chrome-stable)"
-          echo ""
           echo "⭐ Scraping 1-star operators..."
-          npx ts-node scraper.ts 1 --skins
+          python scraper.py 1 --skins
           echo ""
           echo "⭐⭐ Scraping 2-star operators..."
-          npx ts-node scraper.ts 2 --skins
+          python scraper.py 2 --skins
           echo ""
           echo "⭐⭐⭐ Scraping 3-star operators..."
-          npx ts-node scraper.ts 3 --skins
+          python scraper.py 3 --skins
           echo ""
           echo "⭐⭐⭐⭐ Scraping 4-star operators..."
-          npx ts-node scraper.ts 4 --skins
+          python scraper.py 4 --skins
           echo ""
           echo "⭐⭐⭐⭐⭐ Scraping 5-star operators..."
-          npx ts-node scraper.ts 5 --skins
+          python scraper.py 5 --skins
           echo ""
           echo "⭐⭐⭐⭐⭐⭐ Scraping 6-star operators..."
-          npx ts-node scraper.ts 6 --skins
+          python scraper.py 6 --skins
           echo ""
           echo "✅ All rarities scraped (defaults + skins)!"
-        env:
-          NODE_ENV: production
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
-          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
 
       - name: Check for changes
         id: verify-changed-files

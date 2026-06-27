@@ -33,65 +33,40 @@ arknights-pfp-dataset/
 Install dependencies:
 
 ```bash
-npm install
+pip install -r requirements.txt
+playwright install chromium
 ```
 
 ### Running Manually
 
-You can run the scraper in three ways:
+Run the scraper with Python:
 
-**1. With npm scripts (easiest):**
 ```bash
-npm run scrape:6star
-```
+# Scrape 6-star operators with skins
+python scraper.py 6 --skins
 
-**2. Directly with ts-node:**
-```bash
-npx ts-node scraper.ts 6
-npx ts-node scraper.ts 6 --skins
-```
+# Scrape without skins (defaults only)
+python scraper.py 6
 
-**3. Compile and run with Node:**
-```bash
-npm run build              # Compile TypeScript to JavaScript
-node dist/scraper.js 6     # Run compiled version
-node dist/scraper.js 6 --skins
+# Other rarities
+python scraper.py 1 --skins
+python scraper.py 5 --skins
 ```
 
 ## Updating Images
 
-### Default Images Only
-
-Run the scraper to download new operator default images:
+Run the scraper to download operator images:
 
 ```bash
-# Scrape all 6-star operators (most common)
-npm run scrape:6star
+# Scrape specific rarity with all skins
+python scraper.py 6 --skins
+python scraper.py 5 --skins
 
-# Or scrape other rarities
-npm run scrape:1star
-npm run scrape:2star
-npm run scrape:3star
-npm run scrape:4star
-npm run scrape:5star
+# Scrape all rarities with skins
+for i in {1..6}; do python scraper.py $i --skins; done
 
-# Or specify rarity directly
-npm run scrape -- 6
-```
-
-### All Skins (Optional)
-
-To download ALL skins/outfits for operators (organizes in `all/` folder):
-
-```bash
-# Scrape 6-star operators with all skins
-npm run scrape:skins
-
-# Or scrape all rarities with skins (takes a while!)
-npm run scrape:all-skins
-
-# Or specify rarity with skins flag
-npm run scrape -- 6 --skins
+# Scrape defaults only (without skins)
+python scraper.py 6
 ```
 
 The scraper will:
