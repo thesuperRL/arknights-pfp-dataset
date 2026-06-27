@@ -4,13 +4,7 @@ on:
   schedule:
     # Monthly: 1st of every month at 00:00 UTC
     - cron: '0 0 1 * *'
-  workflow_dispatch:
-    inputs:
-      include_skins:
-        description: 'Include all operator skins (default: true for scheduled runs)'
-        required: false
-        type: boolean
-        default: true
+  workflow_dispatch: # Allow manual triggering
 
 permissions:
   contents: write
@@ -74,43 +68,30 @@ jobs:
             wget \
             xdg-utils
 
-      - name: Scrape operator images (defaults only)
-        if: ${{ inputs.include_skins == false }}
+      - name: Scrape operator images (defaults and skins in one pass)
         run: |
-          echo "🚀 Starting operator image scrape (defaults only)..."
+          echo "🚀 Starting operator image scrape (defaults + skins in single pass)..."
+          echo "⚠️  Each operator page visited only once for efficiency"
           echo ""
           echo "⭐ Scraping 1-star operators..."
-          npm run scrape:1star
+          npm run scrape:skins -- 1
           echo ""
           echo "⭐⭐ Scraping 2-star operators..."
-          npm run scrape:2star
+          npm run scrape:skins -- 2
           echo ""
           echo "⭐⭐⭐ Scraping 3-star operators..."
-          npm run scrape:3star
+          npm run scrape:skins -- 3
           echo ""
           echo "⭐⭐⭐⭐ Scraping 4-star operators..."
-          npm run scrape:4star
+          npm run scrape:skins -- 4
           echo ""
           echo "⭐⭐⭐⭐⭐ Scraping 5-star operators..."
-          npm run scrape:5star
+          npm run scrape:skins -- 5
           echo ""
           echo "⭐⭐⭐⭐⭐⭐ Scraping 6-star operators..."
-          npm run scrape:6star
+          npm run scrape:6star --skins
           echo ""
-          echo "✅ All rarities scraped!"
-        env:
-          NODE_ENV: production
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: false
-
-      - name: Scrape operator images with all skins
-        if: ${{ inputs.include_skins != false }}
-        run: |
-          echo "🚀 Starting operator image scrape (with all skins)..."
-          echo "⚠️  This may take a while..."
-          echo ""
-          npm run scrape:all-skins
-          echo ""
-          echo "✅ All skins scraped!"
+          echo "✅ All rarities scraped (defaults + skins)!"
         env:
           NODE_ENV: production
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: false

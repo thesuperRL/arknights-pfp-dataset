@@ -931,6 +931,7 @@ class ArknightsScraper {
       let skippedCount = 0;
       
       // ponytail: parallel downloads instead of sequential - simple perf win
+      // ponytail: now downloads both default and skins in one pass per operator
       console.log(`\n🚀 Starting parallel download with batch size 10...`);
       const downloadPromises = operatorsToProcess.map(async (operator, i) => {
         console.log(`\n  [${i + 1}/${operatorsToProcess.length}] Processing: ${operator.name} (${operator.id})`);
@@ -978,6 +979,13 @@ class ArknightsScraper {
             }
           }
         }
+        
+        // ponytail: Download skins in the same pass if enabled (no second visit)
+        if (this.config.scrapeSkins && this.config.allSkinsDir) {
+          console.log(`    🎨 Processing skins for ${operator.name}...`);
+          await this.downloadSkinsForOperator(operator);
+        }
+        
         return { downloaded: downloadedCount > 0, skipped: skippedCount > 0 };
       });
       
