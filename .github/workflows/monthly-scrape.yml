@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       include_skins:
-        description: 'Include all operator skins (not just defaults)'
+        description: 'Include all operator skins (default: true for scheduled runs)'
         required: false
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -76,7 +76,7 @@ jobs:
             xdg-utils
 
       - name: Scrape operator images (defaults only)
-        if: ${{ !inputs.include_skins }}
+        if: ${{ inputs.include_skins == false }}
         run: |
           echo "🚀 Starting operator image scrape (defaults only)..."
           echo ""
@@ -103,8 +103,8 @@ jobs:
           NODE_ENV: production
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: false
 
-      - name: Scrape operator images with skins
-        if: ${{ inputs.include_skins }}
+      - name: Scrape operator images with all skins
+        if: ${{ inputs.include_skins != false }}
         run: |
           echo "🚀 Starting operator image scrape (with all skins)..."
           echo "⚠️  This may take a while..."

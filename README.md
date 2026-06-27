@@ -103,7 +103,7 @@ The scraper will:
 
 ## Automated Updates
 
-This repository has a GitHub Actions workflow that automatically scrapes for new operator images monthly (1st of each month). It can also be triggered manually from the Actions tab with an option to include all skins.
+This repository has a GitHub Actions workflow that automatically scrapes for new operator images **including all skins** monthly (1st of each month). It can also be triggered manually from the Actions tab with an option to scrape only defaults if needed.
 
 ## Committing Updates
 
