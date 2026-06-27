@@ -69,7 +69,11 @@ jobs:
             xdg-utils
 
       - name: Install Chrome for Puppeteer
-        run: npx puppeteer browsers install chrome
+        run: |
+          echo "🗑️  Clearing Puppeteer cache..."
+          rm -rf ~/.cache/puppeteer
+          echo "📥 Installing Chrome..."
+          npx puppeteer browsers install chrome
 
       - name: Scrape operator images (defaults and skins in one pass)
         run: |
