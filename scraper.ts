@@ -907,12 +907,15 @@ class ArknightsScraper {
         return isNew || !hasValidImage;
       });
       
-      console.log(`\nProcessing ${operatorsToProcess.length} operator images (${operators.length - operatorsToProcess.length} already have images)...`);
+      console.log(`\n📸 Processing ${operatorsToProcess.length} operator images (${operators.length - operatorsToProcess.length} already have images)...`);
       let downloadedCount = 0;
       let skippedCount = 0;
       
       // ponytail: parallel downloads instead of sequential - simple perf win
+      console.log(`\n🚀 Starting parallel download with batch size 10...`);
       const downloadPromises = operatorsToProcess.map(async (operator, i) => {
+        console.log(`\n  [${i + 1}/${operatorsToProcess.length}] Processing: ${operator.name} (${operator.id})`);
+        
         // Check if profileImage is already a local path (from always-include)
         if (operator.profileImage && operator.profileImage.startsWith('/images/operators/')) {
           const imagePath = path.join(__dirname, '../public', operator.profileImage);
@@ -963,9 +966,22 @@ class ArknightsScraper {
       const batchSize = 10;
       for (let i = 0; i < downloadPromises.length; i += batchSize) {
         const batch = downloadPromises.slice(i, i + batchSize);
+        const batchNum = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(downloadPromises.length / batchSize);
+        console.log(`\n📦 Processing batch ${batchNum}/${totalBatches} (${batch.length} operators)...`);
+        
+        const batchStart = Date.now();
         await Promise.all(batch);
-        this.saveOperators(operators); // Save after each batch
-        await new Promise(resolve => setTimeout(resolve, 200)); // Brief pause between batches
+        const batchTime = ((Date.now() - batchStart) / 1000).toFixed(1);
+        
+        console.log(`✅ Batch ${batchNum} complete in ${batchTime}s`);
+        console.log(`💾 Saving progress...`);
+        this.saveOperators(operators);
+        
+        if (i + batchSize < downloadPromises.length) {
+          console.log(`⏸️  Pausing 200ms before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       }
       
       console.log(`\n📊 Image processing complete: ${downloadedCount} downloaded, ${skippedCount} skipped`);
@@ -1124,10 +1140,12 @@ class ArknightsScraper {
       return;
     }
 
-    console.log(`\n📸 Scraping skins for ${operators.length} operators...`);
+    console.log(`\n🎨 Scraping skins for ${operators.length} operators...`);
+    console.log(`📊 Processing in batches of 5 operators at a time\n`);
     
     // ponytail: parallel skin processing, batch to avoid overwhelming the server
     const processOperator = async (operator: OperatorData, index: number) => {
+      console.log(`  [${index + 1}/${operators.length}] 🔍 Processing ${operator.name} (${operator.id})...`);
       const operatorFolder = path.join(this.config.allSkinsDir!, operator.id);
       if (!fs.existsSync(operatorFolder)) {
         fs.mkdirSync(operatorFolder, { recursive: true });
@@ -1138,38 +1156,69 @@ class ArknightsScraper {
       if (!fs.existsSync(defaultSkinPath)) {
         const defaultImagePath = path.join(this.config.imagesDir, `${operator.id}.png`);
         if (fs.existsSync(defaultImagePath)) {
+          console.log(`    📋 Copying default skin from ${operator.id}.png`);
           fs.copyFileSync(defaultImagePath, defaultSkinPath);
+          console.log(`    ✅ Default skin copied`);
+        } else {
+          console.log(`    ⚠️  Default image not found at ${defaultImagePath}`);
         }
+      } else {
+        console.log(`    ⏭️  Default skin already exists`);
       }
       
       // Scrape and download skins in parallel
+      console.log(`    🔎 Scraping wiki page for skins...`);
       const skins = await this.scrapeOperatorSkins(operator.name, operator.id);
-      const downloadTasks = skins
-        .filter(skin => !fs.existsSync(path.join(operatorFolder, skin.filename)))
-        .map(async (skin) => {
-          try {
-            const response = await axios.get(skin.imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
-            fs.writeFileSync(path.join(operatorFolder, skin.filename), response.data);
-            return true;
-          } catch {
-            return false;
-          }
-        });
+      console.log(`    📸 Found ${skins.length} additional skins`);
       
-      await Promise.all(downloadTasks);
-      if ((index + 1) % 10 === 0) {
-        console.log(`  Progress: ${index + 1}/${operators.length}`);
+      const newSkins = skins.filter(skin => !fs.existsSync(path.join(operatorFolder, skin.filename)));
+      if (newSkins.length === 0) {
+        console.log(`    ⏭️  All skins already downloaded`);
+        return;
       }
+      
+      console.log(`    📥 Downloading ${newSkins.length} new skins...`);
+      const downloadTasks = newSkins.map(async (skin) => {
+        try {
+          console.log(`      ⬇️  ${skin.filename}...`);
+          const response = await axios.get(skin.imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
+          fs.writeFileSync(path.join(operatorFolder, skin.filename), response.data);
+          console.log(`      ✅ ${skin.filename} saved`);
+          return true;
+        } catch (error: any) {
+          console.log(`      ❌ ${skin.filename} failed: ${error.message}`);
+          return false;
+        }
+      });
+      
+      const results = await Promise.all(downloadTasks);
+      const succeeded = results.filter(r => r).length;
+      console.log(`    ✅ Downloaded ${succeeded}/${newSkins.length} skins for ${operator.name}`);
     };
     
     // Process in batches of 5 operators at a time
     const batchSize = 5;
+    const totalBatches = Math.ceil(operators.length / batchSize);
+    
     for (let i = 0; i < operators.length; i += batchSize) {
       const batch = operators.slice(i, i + batchSize);
+      const batchNum = Math.floor(i / batchSize) + 1;
+      
+      console.log(`\n📦 Batch ${batchNum}/${totalBatches} - Processing ${batch.length} operators in parallel...`);
+      const batchStart = Date.now();
+      
       await Promise.all(batch.map((op, idx) => processOperator(op, i + idx)));
+      
+      const batchTime = ((Date.now() - batchStart) / 1000).toFixed(1);
+      console.log(`✅ Batch ${batchNum} complete in ${batchTime}s`);
+      
+      if (i + batchSize < operators.length) {
+        console.log(`⏸️  Brief pause before next batch...\n`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
     
-    console.log(`\n✅ Skin scraping complete!`);
+    console.log(`\n🎉 Skin scraping complete! Processed ${operators.length} operators.`);
   }
 }
 
