@@ -666,7 +666,7 @@ class ArknightsScraper {
     const operators: OperatorData[] = [];
 
     // Try finding operator cards or list items
-    $('.operator-card, .character-card, .mw-parser-output > ul > li').each((_index, element) => {
+    $('.operator-card, .character-card, .mw-parser-output > ul > li').each((_index: number, element: any) => {
       const $el = $(element);
       const img = $el.find('img').first();
       const imageUrl = img.attr('src') || img.attr('data-src') || '';
@@ -675,7 +675,7 @@ class ArknightsScraper {
       
       // Extract class from image
       let operatorClass = 'Unknown';
-      const classImg = $el.find('.class img, .type img, img[src*=".png"]').filter((_i, el) => {
+      const classImg = $el.find('.class img, .type img, img[src*=".png"]').filter((_i: number, el: any) => {
         const src = $(el).attr('src') || $(el).attr('data-src') || '';
         return /(Guard|Caster|Defender|Sniper|Support|Specialist|Vanguard|Medic)\.png/i.test(src);
       }).first();
