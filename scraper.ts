@@ -230,56 +230,75 @@ class ArknightsScraper {
 
   /**
    * Downloads an image from a URL and saves it locally
+   * ponytail: simple retry logic for robustness
    */
   private async downloadImage(imageUrl: string, filename: string): Promise<string> {
-    try {
-      // Handle relative URLs
-      let fullUrl = imageUrl;
-      if (imageUrl.startsWith('//')) {
-        fullUrl = 'https:' + imageUrl;
-      } else if (imageUrl.startsWith('/')) {
-        fullUrl = 'https://arknights.wiki.gg' + imageUrl;
-      } else if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-        // If it's a relative path without leading slash, add base URL
-        fullUrl = 'https://arknights.wiki.gg/' + imageUrl;
+    const maxRetries = 2;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Handle relative URLs
+        let fullUrl = imageUrl;
+        if (imageUrl.startsWith('//')) {
+          fullUrl = 'https:' + imageUrl;
+        } else if (imageUrl.startsWith('/')) {
+          fullUrl = 'https://arknights.wiki.gg' + imageUrl;
+        } else if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+          // If it's a relative path without leading slash, add base URL
+          fullUrl = 'https://arknights.wiki.gg/' + imageUrl;
+        }
+
+        // Ensure filename is safe
+        const safeFilename = this.sanitizeFilename(filename.split('.')[0]) + path.extname(filename);
+        
+        console.log(`      📥 Downloading: ${safeFilename} from ${fullUrl.substring(0, 60)}...`);
+        const startTime = Date.now();
+        
+        const response = await axios.get(fullUrl, {
+          responseType: 'arraybuffer',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://arknights.wiki.gg/',
+            'Sec-Fetch-Dest': 'image',
+            'Sec-Fetch-Mode': 'no-cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'Connection': 'keep-alive'
+          },
+          timeout: 30000
+        });
+
+        const downloadTime = Date.now() - startTime;
+        const sizeKB = (response.data.length / 1024).toFixed(1);
+
+        // Ensure images directory exists
+        if (!fs.existsSync(this.config.imagesDir)) {
+          console.log(`      📁 Creating directory: ${this.config.imagesDir}`);
+          fs.mkdirSync(this.config.imagesDir, { recursive: true });
+        }
+
+        const filePath = path.join(this.config.imagesDir, safeFilename);
+        fs.writeFileSync(filePath, response.data);
+        console.log(`      ✅ Saved: ${safeFilename} (${sizeKB}KB, ${downloadTime}ms)`);
+        
+        // Return relative path from public directory
+        return `/images/operators/${safeFilename}`;
+      } catch (error: any) {
+        console.log(`      ⚠️  Attempt ${attempt + 1}/${maxRetries + 1} failed: ${error.message}`);
+        if (attempt === maxRetries) {
+          console.error(`      ❌ Download failed after ${maxRetries + 1} attempts`);
+          // Return original URL if download fails
+          return imageUrl;
+        }
+        const waitTime = 1000 * (attempt + 1);
+        console.log(`      ⏱️  Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
-
-      // Ensure filename is safe
-      const safeFilename = this.sanitizeFilename(filename.split('.')[0]) + path.extname(filename);
-      
-      console.log(`Downloading image: ${fullUrl} -> ${safeFilename}`);
-      const response = await axios.get(fullUrl, {
-        responseType: 'arraybuffer',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Referer': 'https://arknights.wiki.gg/',
-          'Sec-Fetch-Dest': 'image',
-          'Sec-Fetch-Mode': 'no-cors',
-          'Sec-Fetch-Site': 'same-origin',
-          'Connection': 'keep-alive'
-        },
-        timeout: 30000
-      });
-
-      // Ensure images directory exists
-      if (!fs.existsSync(this.config.imagesDir)) {
-        fs.mkdirSync(this.config.imagesDir, { recursive: true });
-      }
-
-      const filePath = path.join(this.config.imagesDir, safeFilename);
-      fs.writeFileSync(filePath, response.data);
-      console.log(`✅ Saved image: ${filePath}`);
-      
-      // Return relative path from public directory
-      return `/images/operators/${safeFilename}`;
-    } catch (error) {
-      console.error(`❌ Error downloading image ${imageUrl}:`, error);
-      // Return original URL if download fails
-      return imageUrl;
     }
+    // Fallback (should never reach here)
+    return imageUrl;
   }
 
   /**
@@ -1096,10 +1115,11 @@ class ArknightsScraper {
     const operatorPageUrl = `https://arknights.wiki.gg/wiki/${encodeURIComponent(operatorName.replace(/ /g, '_'))}`;
     
     try {
+      console.log(`      🌐 Fetching: ${operatorPageUrl}`);
       const html = await this.fetchHtmlSafe(operatorPageUrl);
       const $ = cheerio.load(html);
       
-      // Look for avatar/profile images (skins usually have "avatar" in the path)
+      console.log(`      🔍 Scanning page for skin images...`);
       const foundImages = new Set<string>();
       
       $('img').each((i, elem) => {
@@ -1116,6 +1136,7 @@ class ArknightsScraper {
           
           if (!foundImages.has(imgUrl) && !skinName.toLowerCase().includes('default')) {
             foundImages.add(imgUrl);
+            console.log(`        🎨 Found skin: ${skinName}`);
             skins.push({
               name: skinName,
               imageUrl: imgUrl,
@@ -1125,8 +1146,10 @@ class ArknightsScraper {
         }
       });
       
+      console.log(`      ✅ Found ${skins.length} skins total`);
       return skins;
-    } catch (error) {
+    } catch (error: any) {
+      console.log(`      ⚠️  Error scraping skins: ${error.message}`);
       return [];
     }
   }

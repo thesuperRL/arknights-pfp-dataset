@@ -128,7 +128,3 @@ git submodule add git@github.com:thesuperRL/arknights-pfp-dataset.git path/to/im
 - **Format**: PNG
 - **Size**: ~7.2MB total
 - **Naming**: Lowercase operator ID (e.g., `silverash.png`, `ch_en.png`)
-
-## License
-
-MIT
