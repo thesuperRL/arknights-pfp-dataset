@@ -911,8 +911,8 @@ class ArknightsScraper {
       let downloadedCount = 0;
       let skippedCount = 0;
       
-      for (let i = 0; i < operatorsToProcess.length; i++) {
-        const operator = operatorsToProcess[i];
+      // ponytail: parallel downloads instead of sequential - simple perf win
+      const downloadPromises = operatorsToProcess.map(async (operator, i) => {
         // Check if profileImage is already a local path (from always-include)
         if (operator.profileImage && operator.profileImage.startsWith('/images/operators/')) {
           const imagePath = path.join(__dirname, '../public', operator.profileImage);
@@ -951,18 +951,21 @@ class ArknightsScraper {
               operator.profileImage = relativeImagePath;
               skippedCount++;
             } else {
-              // Download the image (imageUrl is stored in profileImage temporarily)
               operator.profileImage = await this.downloadImage(imageUrl, filename);
               downloadedCount++;
-              
-              // Add small delay to be respectful to the server
-              await new Promise(resolve => setTimeout(resolve, 500));
             }
           }
         }
-        
-        // Save after each operator's image is processed
-        this.saveOperators(operators);
+        return { downloaded: downloadedCount > 0, skipped: skippedCount > 0 };
+      });
+      
+      // ponytail: wait for all downloads in parallel, batch size 10 to avoid overwhelming server
+      const batchSize = 10;
+      for (let i = 0; i < downloadPromises.length; i += batchSize) {
+        const batch = downloadPromises.slice(i, i + batchSize);
+        await Promise.all(batch);
+        this.saveOperators(operators); // Save after each batch
+        await new Promise(resolve => setTimeout(resolve, 200)); // Brief pause between batches
       }
       
       console.log(`\n📊 Image processing complete: ${downloadedCount} downloaded, ${skippedCount} skipped`);
@@ -1123,50 +1126,47 @@ class ArknightsScraper {
 
     console.log(`\n📸 Scraping skins for ${operators.length} operators...`);
     
-    for (let i = 0; i < operators.length; i++) {
-      const operator = operators[i];
-      console.log(`\n[${i + 1}/${operators.length}] Processing ${operator.name}...`);
-      
-      const operatorFolder = path.join(this.config.allSkinsDir, operator.id);
+    // ponytail: parallel skin processing, batch to avoid overwhelming the server
+    const processOperator = async (operator: OperatorData, index: number) => {
+      const operatorFolder = path.join(this.config.allSkinsDir!, operator.id);
       if (!fs.existsSync(operatorFolder)) {
         fs.mkdirSync(operatorFolder, { recursive: true });
       }
       
-      // Copy default skin
+      // Copy default skin if needed
       const defaultSkinPath = path.join(operatorFolder, 'default.png');
       if (!fs.existsSync(defaultSkinPath)) {
         const defaultImagePath = path.join(this.config.imagesDir, `${operator.id}.png`);
         if (fs.existsSync(defaultImagePath)) {
           fs.copyFileSync(defaultImagePath, defaultSkinPath);
-          console.log(`  ✅ Copied default skin`);
         }
-      } else {
-        console.log(`  ⏭️  Default skin already exists`);
       }
       
-      // Scrape and download additional skins
+      // Scrape and download skins in parallel
       const skins = await this.scrapeOperatorSkins(operator.name, operator.id);
-      console.log(`  📸 Found ${skins.length} additional skins`);
+      const downloadTasks = skins
+        .filter(skin => !fs.existsSync(path.join(operatorFolder, skin.filename)))
+        .map(async (skin) => {
+          try {
+            const response = await axios.get(skin.imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
+            fs.writeFileSync(path.join(operatorFolder, skin.filename), response.data);
+            return true;
+          } catch {
+            return false;
+          }
+        });
       
-      for (const skin of skins) {
-        const skinPath = path.join(operatorFolder, skin.filename);
-        
-        if (fs.existsSync(skinPath)) {
-          console.log(`  ⏭️  ${skin.filename} already exists`);
-          continue;
-        }
-        
-        try {
-          // Download using modified downloadImage that takes targetDir
-          const imageUrl = skin.imageUrl;
-          const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
-          fs.writeFileSync(skinPath, response.data);
-          console.log(`  ✅ Downloaded ${skin.filename}`);
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (error) {
-          console.warn(`  ⚠️  Failed to download ${skin.filename}`);
-        }
+      await Promise.all(downloadTasks);
+      if ((index + 1) % 10 === 0) {
+        console.log(`  Progress: ${index + 1}/${operators.length}`);
       }
+    };
+    
+    // Process in batches of 5 operators at a time
+    const batchSize = 5;
+    for (let i = 0; i < operators.length; i += batchSize) {
+      const batch = operators.slice(i, i + batchSize);
+      await Promise.all(batch.map((op, idx) => processOperator(op, i + idx)));
     }
     
     console.log(`\n✅ Skin scraping complete!`);
