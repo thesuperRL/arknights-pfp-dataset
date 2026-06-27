@@ -1163,93 +1163,41 @@ class ArknightsScraper {
   }
 
   /**
-   * Downloads all skins for operators to organized folders
+   * Downloads skins for a single operator (called during main scrape pass)
+   * ponytail: integrated into main loop to avoid visiting pages twice
    */
-  async downloadAllSkins(operators: OperatorData[]): Promise<void> {
-    if (!this.config.allSkinsDir || !this.config.scrapeSkins) {
-      console.log('\n⏭️  Skin scraping disabled (use --skins flag to enable)');
-      return;
-    }
+  private async downloadSkinsForOperator(operator: OperatorData): Promise<void> {
+    if (!this.config.allSkinsDir) return;
 
-    console.log(`\n🎨 Scraping skins for ${operators.length} operators...`);
-    console.log(`📊 Processing in batches of 5 operators at a time\n`);
+    const operatorFolder = path.join(this.config.allSkinsDir, operator.id);
+    if (!fs.existsSync(operatorFolder)) {
+      fs.mkdirSync(operatorFolder, { recursive: true });
+    }
     
-    // ponytail: parallel skin processing, batch to avoid overwhelming the server
-    const processOperator = async (operator: OperatorData, index: number) => {
-      console.log(`  [${index + 1}/${operators.length}] 🔍 Processing ${operator.name} (${operator.id})...`);
-      const operatorFolder = path.join(this.config.allSkinsDir!, operator.id);
-      if (!fs.existsSync(operatorFolder)) {
-        fs.mkdirSync(operatorFolder, { recursive: true });
-      }
-      
-      // Copy default skin if needed
-      const defaultSkinPath = path.join(operatorFolder, 'default.png');
-      if (!fs.existsSync(defaultSkinPath)) {
-        const defaultImagePath = path.join(this.config.imagesDir, `${operator.id}.png`);
-        if (fs.existsSync(defaultImagePath)) {
-          console.log(`    📋 Copying default skin from ${operator.id}.png`);
-          fs.copyFileSync(defaultImagePath, defaultSkinPath);
-          console.log(`    ✅ Default skin copied`);
-        } else {
-          console.log(`    ⚠️  Default image not found at ${defaultImagePath}`);
-        }
-      } else {
-        console.log(`    ⏭️  Default skin already exists`);
-      }
-      
-      // Scrape and download skins in parallel
-      console.log(`    🔎 Scraping wiki page for skins...`);
-      const skins = await this.scrapeOperatorSkins(operator.name, operator.id);
-      console.log(`    📸 Found ${skins.length} additional skins`);
-      
-      const newSkins = skins.filter(skin => !fs.existsSync(path.join(operatorFolder, skin.filename)));
-      if (newSkins.length === 0) {
-        console.log(`    ⏭️  All skins already downloaded`);
-        return;
-      }
-      
-      console.log(`    📥 Downloading ${newSkins.length} new skins...`);
-      const downloadTasks = newSkins.map(async (skin) => {
-        try {
-          console.log(`      ⬇️  ${skin.filename}...`);
-          const response = await axios.get(skin.imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
-          fs.writeFileSync(path.join(operatorFolder, skin.filename), response.data);
-          console.log(`      ✅ ${skin.filename} saved`);
-          return true;
-        } catch (error: any) {
-          console.log(`      ❌ ${skin.filename} failed: ${error.message}`);
-          return false;
-        }
-      });
-      
-      const results = await Promise.all(downloadTasks);
-      const succeeded = results.filter(r => r).length;
-      console.log(`    ✅ Downloaded ${succeeded}/${newSkins.length} skins for ${operator.name}`);
-    };
-    
-    // Process in batches of 5 operators at a time
-    const batchSize = 5;
-    const totalBatches = Math.ceil(operators.length / batchSize);
-    
-    for (let i = 0; i < operators.length; i += batchSize) {
-      const batch = operators.slice(i, i + batchSize);
-      const batchNum = Math.floor(i / batchSize) + 1;
-      
-      console.log(`\n📦 Batch ${batchNum}/${totalBatches} - Processing ${batch.length} operators in parallel...`);
-      const batchStart = Date.now();
-      
-      await Promise.all(batch.map((op, idx) => processOperator(op, i + idx)));
-      
-      const batchTime = ((Date.now() - batchStart) / 1000).toFixed(1);
-      console.log(`✅ Batch ${batchNum} complete in ${batchTime}s`);
-      
-      if (i + batchSize < operators.length) {
-        console.log(`⏸️  Brief pause before next batch...\n`);
-        await new Promise(resolve => setTimeout(resolve, 500));
+    // Copy default skin if needed
+    const defaultSkinPath = path.join(operatorFolder, 'default.png');
+    if (!fs.existsSync(defaultSkinPath)) {
+      const defaultImagePath = path.join(this.config.imagesDir, `${operator.id}.png`);
+      if (fs.existsSync(defaultImagePath)) {
+        fs.copyFileSync(defaultImagePath, defaultSkinPath);
       }
     }
     
-    console.log(`\n🎉 Skin scraping complete! Processed ${operators.length} operators.`);
+    // Scrape and download skins
+    const skins = await this.scrapeOperatorSkins(operator.name, operator.id);
+    
+    const newSkins = skins.filter(skin => !fs.existsSync(path.join(operatorFolder, skin.filename)));
+    if (newSkins.length === 0) return;
+    
+    // Download new skins in parallel
+    await Promise.all(newSkins.map(async (skin) => {
+      try {
+        const response = await axios.get(skin.imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
+        fs.writeFileSync(path.join(operatorFolder, skin.filename), response.data);
+      } catch (error: any) {
+        console.log(`      ⚠️  ${skin.filename} failed: ${error.message}`);
+      }
+    }));
   }
 }
 
@@ -1277,12 +1225,6 @@ async function main() {
     const operatorsDict = await scraper.scrape();
     const operatorCount = Object.keys(operatorsDict).length;
     console.log(`\n🎉 Successfully scraped ${operatorCount} ${rarity}-star operators!`);
-    
-    // Download all skins if flag is set
-    if (scrapeSkins) {
-      const operators = Object.values(operatorsDict);
-      await scraper.downloadAllSkins(operators);
-    }
   } catch (error) {
     console.error('Scraping failed:', error);
     process.exit(1);
