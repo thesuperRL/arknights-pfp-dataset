@@ -36,6 +36,28 @@ Install dependencies:
 npm install
 ```
 
+### Running Manually
+
+You can run the scraper in three ways:
+
+**1. With npm scripts (easiest):**
+```bash
+npm run scrape:6star
+```
+
+**2. Directly with ts-node:**
+```bash
+npx ts-node scraper.ts 6
+npx ts-node scraper.ts 6 --skins
+```
+
+**3. Compile and run with Node:**
+```bash
+npm run build              # Compile TypeScript to JavaScript
+node dist/scraper.js 6     # Run compiled version
+node dist/scraper.js 6 --skins
+```
+
 ## Updating Images
 
 ### Default Images Only

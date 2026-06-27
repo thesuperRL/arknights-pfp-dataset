@@ -4,6 +4,7 @@
   "description": "Arknights operator profile pictures dataset with scraper",
   "main": "scraper.ts",
   "scripts": {
+    "build": "tsc",
     "scrape": "ts-node scraper.ts",
     "scrape:1star": "ts-node scraper.ts 1",
     "scrape:2star": "ts-node scraper.ts 2",
