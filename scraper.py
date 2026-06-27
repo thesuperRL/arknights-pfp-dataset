@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
@@ -33,6 +33,11 @@ class ArknightsScraper:
         self.default_dir.mkdir(exist_ok=True)
         if scrape_skins:
             self.all_dir.mkdir(exist_ok=True)
+        
+        # CloudScraper session for fast Cloudflare bypass
+        self.scraper = cloudscraper.create_scraper(
+            browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False}
+        )
 
     def sanitize_filename(self, name: str) -> str:
         """Sanitize filename by removing special characters"""
@@ -53,22 +58,18 @@ class ArknightsScraper:
                 browser.close()
 
     def fetch_html(self, url: str) -> str:
-        """Fetch HTML with fallback to browser if needed"""
+        """Fetch HTML with cloudscraper (fast Cloudflare bypass)"""
         print(f"    📡 Fetching: {url}")
         try:
-            response = requests.get(url, timeout=30, headers={
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            })
-            if 'Cloudflare' in response.text or response.status_code == 403:
-                print("      ⚠️  Cloudflare detected, using browser...")
-                return self.fetch_with_browser(url)
+            # CloudScraper automatically handles Cloudflare challenges (fast!)
+            response = self.scraper.get(url, timeout=30)
             return response.text
         except Exception as e:
-            print(f"      ⚠️  Request failed: {e}, trying browser...")
+            print(f"      ⚠️  CloudScraper failed: {e}, trying browser...")
             return self.fetch_with_browser(url)
 
     def download_image(self, url: str, filepath: Path, retries: int = 2) -> bool:
-        """Download image with retry logic"""
+        """Download image with retry logic using cloudscraper"""
         if not url.startswith('http'):
             url = 'https:' + url if url.startswith('//') else urljoin('https://arknights.wiki.gg', url)
         
@@ -77,10 +78,7 @@ class ArknightsScraper:
         for attempt in range(retries + 1):
             try:
                 start = time.time()
-                response = requests.get(url, timeout=30, headers={
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                    'Referer': 'https://arknights.wiki.gg/'
-                })
+                response = self.scraper.get(url, timeout=30)
                 
                 if response.status_code == 200:
                     filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -182,20 +180,20 @@ class ArknightsScraper:
             return []
 
     def process_operators(self, operators: List[Dict]) -> None:
-        """Download images for all operators"""
+        """Download images for all operators (always rescrape for new skins)"""
         print(f"\n📸 Processing {len(operators)} operator images...")
         
         for idx, op in enumerate(operators, 1):
             print(f"\n  [{idx}/{len(operators)}] Processing: {op['name']} ({op['id']})")
             
-            # Download default image
+            # Download default image (skip if exists to save time)
             default_path = self.default_dir / f"{op['id']}.png"
             if default_path.exists():
                 print(f"    ⏭️  Default image already exists")
             else:
                 self.download_image(op['imageUrl'], default_path)
             
-            # Download skins if enabled
+            # Download skins if enabled (ALWAYS scrape to check for new skins)
             if self.scrape_skins:
                 print(f"    🎨 Processing skins for {op['name']}...")
                 op_dir = self.all_dir / op['id']
@@ -207,17 +205,20 @@ class ArknightsScraper:
                     import shutil
                     shutil.copy(default_path, default_skin)
                 
-                # Scrape and download other skins
+                # ALWAYS scrape skins (operators may have new skins)
                 skins = self.scrape_operator_skins(op)
                 
+                # Only download skins we don't have yet
                 for skin in skins:
                     skin_path = op_dir / skin['filename']
                     if not skin_path.exists():
                         self.download_image(skin['url'], skin_path)
+                    else:
+                        print(f"      ⏭️  {skin['filename']} already exists")
             
             # Brief pause between operators
             if idx < len(operators):
-                time.sleep(0.2)
+                time.sleep(0.1)  # Reduced from 0.2s for speed
         
         print(f"\n✅ Processing complete!")
 
