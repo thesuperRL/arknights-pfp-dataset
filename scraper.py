@@ -71,15 +71,19 @@ class ArknightsScraper:
                 page.goto(url, timeout=60000, wait_until="domcontentloaded")
                 
                 # Wait for Cloudflare challenge to complete
-                print(f"      ⏳ Waiting for Cloudflare challenge...")
+                print(f"      ⏳ Waiting for Cloudflare challenge (up to 60s)...")
                 try:
                     # Wait for a wiki-specific element to appear (means challenge passed)
-                    page.wait_for_selector('table, .mw-parser-output, #content', timeout=30000)
-                    print(f"      ✅ Challenge passed!")
-                except:
-                    # If timeout, just wait a fixed time
-                    print(f"      ⏳ Waiting 10s...")
-                    page.wait_for_timeout(10000)
+                    page.wait_for_selector('table, .mw-parser-output, #content, h1', timeout=60000)
+                    print(f"      ✅ Page loaded!")
+                except Exception as e:
+                    # If timeout, wait longer and check title
+                    print(f"      ⚠️  Selector timeout: {e}")
+                    page.wait_for_timeout(20000)
+                    title = page.title()
+                    print(f"      📄 Page title: {title}")
+                    if 'Just a' in title or 'moment' in title:
+                        print(f"      ❌ Still on challenge page after wait")
                 
                 html = page.content()
                 return html
