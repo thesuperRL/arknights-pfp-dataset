@@ -20,9 +20,10 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 
 class ArknightsScraper:
-    def __init__(self, rarity: int, scrape_skins: bool = False):
+    def __init__(self, rarity: int, scrape_skins: bool = False, operator_filter: Optional[str] = None):
         self.rarity = rarity
         self.scrape_skins = scrape_skins
+        self.operator_filter = operator_filter
         self.base_url = f"https://arknights.wiki.gg/wiki/Operator/{rarity}-star"
         self.data_dir = Path("data")
         self.default_dir = Path("default")
@@ -100,8 +101,43 @@ class ArknightsScraper:
             print(f"      ⚠️  CloudScraper failed: {e}, trying browser...")
             return self.fetch_with_browser(url)
 
+    def download_image_with_browser(self, url: str, filepath: Path) -> bool:
+        """Download image using Playwright when cloudscraper fails"""
+        print(f"        🌐 Using browser to download image...")
+        try:
+            with sync_playwright() as p:
+                # Try Firefox first (better Cloudflare bypass)
+                try:
+                    browser = p.firefox.launch(headless=True)
+                except Exception:
+                    browser = p.chromium.launch(headless=True)
+                
+                context = browser.new_context()
+                page = context.new_page()
+                
+                # Navigate and wait for network idle
+                response = page.goto(url, wait_until='networkidle', timeout=30000)
+                
+                if response and response.status == 200:
+                    # Get the image content from the response
+                    content = response.body()
+                    filepath.parent.mkdir(parents=True, exist_ok=True)
+                    filepath.write_bytes(content)
+                    size_kb = len(content) / 1024
+                    print(f"        ✅ Browser download: {filepath.name} ({size_kb:.1f}KB)")
+                    browser.close()
+                    return True
+                else:
+                    print(f"        ⚠️  Browser got status: {response.status if response else 'None'}")
+                    browser.close()
+                    return False
+                    
+        except Exception as e:
+            print(f"        ⚠️  Browser download failed: {str(e)[:60]}")
+            return False
+
     def download_image(self, url: str, filepath: Path, retries: int = 2) -> bool:
-        """Download image with retry logic using cloudscraper"""
+        """Download image with retry logic using cloudscraper, fallback to browser"""
         # Fix relative URLs
         if not url.startswith('http'):
             if url.startswith('//'):
@@ -111,6 +147,7 @@ class ArknightsScraper:
         
         print(f"        📥 URL: {url[:80]}...")
         
+        # Try cloudscraper first
         for attempt in range(retries + 1):
             try:
                 start = time.time()
@@ -126,17 +163,23 @@ class ArknightsScraper:
                     print(f"        ✅ Saved: {filepath.name} ({size_kb:.1f}KB, {elapsed}ms)")
                     return True
                 elif response.status_code == 403:
-                    print(f"        ⚠️  Cloudflare blocked (403)")
-                    return False
+                    print(f"        ⚠️  Cloudflare blocked (403), trying browser...")
+                    # Fallback to browser
+                    return self.download_image_with_browser(url, filepath)
                 else:
                     print(f"        ⚠️  HTTP {response.status_code}")
-                    return False
+                    if attempt == retries:
+                        # Last attempt - try browser
+                        return self.download_image_with_browser(url, filepath)
                     
             except Exception as e:
                 print(f"        ⚠️  Error: {str(e)[:60]}")
                 if attempt < retries:
                     wait = (attempt + 1) * 1000
                     time.sleep(wait / 1000)
+                else:
+                    # Last attempt failed - try browser
+                    return self.download_image_with_browser(url, filepath)
         
         return False
 
@@ -270,25 +313,29 @@ class ArknightsScraper:
             skin_count = 0
             for img in all_imgs:
                 src = img.get('src') or img.get('data-src', '')
-                # Look for skin images (exclude icons, get full size)
-                if 'skin' in src.lower() and '_icon' not in src.lower():
+                # Look for icon images (profile pictures): default, elite 2, and skin icons
+                if '_icon' in src.lower() and (
+                    'skin' in src.lower() or 
+                    'elite' in src.lower() or
+                    operator['name'].replace(' ', '_').lower() in src.lower()
+                ):
                     skin_count += 1
                     # Clean URL (remove query params)
-                    src = src.split('?')[0]
+                    clean_src = src.split('?')[0]
                     alt = img.get('alt', '')
-                    skin_name = alt or Path(src).stem
+                    skin_name = alt or Path(clean_src).stem
                     
-                    print(f"        🎨 Found skin: {skin_name[:40]}")
+                    print(f"        🎨 Found icon: {skin_name[:50]}")
                     
                     # Remove .png from name before adding it back (avoid .png.png)
                     base_name = skin_name.replace('.png', '').replace('.PNG', '')
                     skins.append({
                         'name': skin_name,
-                        'url': src,
+                        'url': src,  # Keep query params for actual download
                         'filename': f"{self.sanitize_filename(base_name)}.png"
                     })
             
-            print(f"      ✅ Found {skin_count} skin images (excluding icons)")
+            print(f"      ✅ Found {skin_count} icon images")
             return skins
         except Exception as e:
             print(f"      ⚠️  Error scraping skins: {e}")
@@ -366,6 +413,19 @@ class ArknightsScraper:
         """Main scraping workflow"""
         try:
             operators = self.scrape_operator_list()
+            
+            # Filter for specific operator if requested
+            if self.operator_filter:
+                filter_lower = self.operator_filter.lower()
+                operators = [
+                    op for op in operators 
+                    if filter_lower in op['name'].lower() or filter_lower in op['id'].lower()
+                ]
+                if not operators:
+                    print(f"❌ No operator found matching '{self.operator_filter}'")
+                    sys.exit(1)
+                print(f"🎯 Filtering to {len(operators)} operator(s) matching '{self.operator_filter}'")
+            
             if operators:
                 self.process_operators(operators)
                 self.save_data(operators)
@@ -386,10 +446,12 @@ def main():
                        help='Operator rarity (1-6)')
     parser.add_argument('--skins', '-s', action='store_true',
                        help='Also scrape all operator skins')
+    parser.add_argument('--operator', '-o', type=str,
+                       help='Scrape only this specific operator (by name)')
     
     args = parser.parse_args()
     
-    scraper = ArknightsScraper(args.rarity, args.skins)
+    scraper = ArknightsScraper(args.rarity, args.skins, operator_filter=args.operator)
     scraper.run()
 
 
