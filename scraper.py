@@ -280,10 +280,12 @@ class ArknightsScraper:
                     
                     print(f"        🎨 Found skin: {skin_name[:40]}")
                     
+                    # Remove .png from name before adding it back (avoid .png.png)
+                    base_name = skin_name.replace('.png', '').replace('.PNG', '')
                     skins.append({
                         'name': skin_name,
                         'url': src,
-                        'filename': f"{self.sanitize_filename(skin_name)}.png"
+                        'filename': f"{self.sanitize_filename(base_name)}.png"
                     })
             
             print(f"      ✅ Found {skin_count} skin images (excluding icons)")
