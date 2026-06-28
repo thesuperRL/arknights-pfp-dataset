@@ -46,10 +46,12 @@ class ArknightsScraper:
     def fetch_with_browser(self, url: str) -> str:
         """Fetch page content using Playwright to bypass Cloudflare"""
         print(f"      🌐 Using browser to fetch: {url}")
+        print(f"      ⏰ Browser start at {time.strftime('%H:%M:%S')}")
         with sync_playwright() as p:
             # Try Firefox first (sometimes bypasses Cloudflare better)
-            print(f"      🦊 Trying Firefox...")
+            print(f"      🦊 Launching Firefox...")
             browser = p.firefox.launch(headless=True)
+            print(f"      ✓ Firefox launched")
             try:
                 page = browser.new_page()
                 page.goto(url, timeout=60000, wait_until="domcontentloaded")
@@ -78,9 +80,12 @@ class ArknightsScraper:
     def fetch_html(self, url: str) -> str:
         """Fetch HTML with cloudscraper, fallback to browser if needed"""
         print(f"    📡 Fetching: {url}")
+        print(f"    ⏰ Starting at {time.strftime('%H:%M:%S')}")
         try:
             # CloudScraper handles most Cloudflare challenges
+            print(f"    🔄 Trying CloudScraper...")
             response = self.scraper.get(url, timeout=30)
+            print(f"    ✓ CloudScraper response: {response.status_code}")
             
             # Check if we got a challenge page or empty content
             if (response.status_code == 403 or 
