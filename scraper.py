@@ -260,25 +260,26 @@ class ArknightsScraper:
             print(f"      📊 Found {len(all_imgs)} total images on page")
             
             skins = []
-            avatar_count = 0
+            skin_count = 0
             for img in all_imgs:
                 src = img.get('src') or img.get('data-src', '')
-                if 'avatar' in src.lower() or 'skin' in src.lower():
-                    avatar_count += 1
+                # Look for skin images (exclude icons, get full size)
+                if 'skin' in src.lower() and '_icon' not in src.lower():
+                    skin_count += 1
+                    # Clean URL (remove query params)
                     src = src.split('?')[0]
                     alt = img.get('alt', '')
                     skin_name = alt or Path(src).stem
                     
-                    print(f"        🎨 Found: {skin_name[:50]} - {src[:80]}")
+                    print(f"        🎨 Found skin: {skin_name[:40]}")
                     
-                    if 'default' not in skin_name.lower():
-                        skins.append({
-                            'name': skin_name,
-                            'url': src,
-                            'filename': f"{self.sanitize_filename(skin_name)}.png"
-                        })
+                    skins.append({
+                        'name': skin_name,
+                        'url': src,
+                        'filename': f"{self.sanitize_filename(skin_name)}.png"
+                    })
             
-            print(f"      ✅ Found {avatar_count} avatar/skin images, {len(skins)} unique skins")
+            print(f"      ✅ Found {skin_count} skin images (excluding icons)")
             return skins
         except Exception as e:
             print(f"      ⚠️  Error scraping skins: {e}")
