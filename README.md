@@ -76,9 +76,27 @@ The scraper will:
 4. **Default mode**: Save images to `default/` directory as `{operator-id}.png`
 5. **Skins mode** (`--skins`): Also create `all/{operator-id}/` folders with all skins including default
 
-## Automated Updates
+## Updating Images
 
-This repository has a GitHub Actions workflow that automatically scrapes for new operator images **including all skins** monthly (1st of each month). It can also be triggered manually from the Actions tab with an option to scrape only defaults if needed.
+**Note:** Due to Cloudflare protection, the scraper must be run locally. See [SCRAPING.md](SCRAPING.md) for detailed instructions.
+
+### Quick Start
+
+```bash
+# Setup (one-time)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install firefox
+
+# Run scraper
+./scrape_all.sh
+
+# Commit changes
+git add default/*.png all/*/*.png data/*.json
+git commit -m "Update operator images"
+git push
+```
 
 ## Committing Updates
 

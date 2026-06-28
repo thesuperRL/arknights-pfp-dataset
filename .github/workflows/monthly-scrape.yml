@@ -1,10 +1,11 @@
 name: Monthly Operator Image Scrape
 
 on:
-  schedule:
-    # Monthly: 1st of every month at 00:00 UTC
-    - cron: '0 0 1 * *'
-  workflow_dispatch: # Allow manual triggering
+  # Note: Disabled due to Cloudflare blocking CI environments
+  # Run scraper locally instead (see SCRAPING.md)
+  # schedule:
+  #   - cron: '0 0 1 * *'
+  workflow_dispatch: # Manual trigger (will likely fail due to Cloudflare)
 
 permissions:
   contents: write
