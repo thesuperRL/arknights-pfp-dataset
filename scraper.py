@@ -103,7 +103,7 @@ class ArknightsScraper:
     def download_image(self, url: str, filepath: Path, retries: int = 2) -> bool:
         """Download image with retry logic using cloudscraper"""
         if not url.startswith('http'):
-            url = 'https:' + url if url.startsWith('//') else urljoin('https://arknights.wiki.gg', url)
+            url = 'https:' + url if url.startswith('//') else urljoin('https://arknights.wiki.gg', url)
         
         # URL is already encoded from wiki, use it as-is
         print(f"      📥 Downloading: {filepath.name}...")
