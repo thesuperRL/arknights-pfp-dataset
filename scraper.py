@@ -250,17 +250,26 @@ class ArknightsScraper:
         """Scrape all skins for an operator"""
         url = f"https://arknights.wiki.gg/wiki/{operator['name'].replace(' ', '_')}"
         
+        print(f"      🔎 Checking for skins at: {url}")
         try:
             html = self.fetch_html(url)
             soup = BeautifulSoup(html, 'html.parser')
             
+            # Debug: count all images
+            all_imgs = soup.find_all('img')
+            print(f"      📊 Found {len(all_imgs)} total images on page")
+            
             skins = []
-            for img in soup.find_all('img'):
+            avatar_count = 0
+            for img in all_imgs:
                 src = img.get('src') or img.get('data-src', '')
-                if 'avatar' in src:
+                if 'avatar' in src.lower() or 'skin' in src.lower():
+                    avatar_count += 1
                     src = src.split('?')[0]
                     alt = img.get('alt', '')
                     skin_name = alt or Path(src).stem
+                    
+                    print(f"        🎨 Found: {skin_name[:50]} - {src[:80]}")
                     
                     if 'default' not in skin_name.lower():
                         skins.append({
@@ -269,9 +278,12 @@ class ArknightsScraper:
                             'filename': f"{self.sanitize_filename(skin_name)}.png"
                         })
             
+            print(f"      ✅ Found {avatar_count} avatar/skin images, {len(skins)} unique skins")
             return skins
         except Exception as e:
             print(f"      ⚠️  Error scraping skins: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def process_operators(self, operators: List[Dict]) -> None:
