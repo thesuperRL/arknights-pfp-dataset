@@ -148,6 +148,11 @@ class ArknightsScraper:
         html = self.fetch_html(self.base_url)
         soup = BeautifulSoup(html, 'html.parser')
         
+        # Debug: print what we found
+        print(f"📊 HTML length: {len(html)}")
+        title = soup.find('title')
+        print(f"📄 Page title: {title.get_text() if title else 'None'}")
+        
         operators = []
         
         # Try multiple table selectors
@@ -174,9 +179,19 @@ class ArknightsScraper:
         
         if not table:
             print("⚠️  No table found, trying card-based layout...")
+            
+            # Debug: show what elements we have
+            all_imgs = len(soup.find_all('img'))
+            all_links = len(soup.find_all('a'))
+            all_divs = len(soup.find_all('div'))
+            print(f"📊 Found: {all_imgs} images, {all_links} links, {all_divs} divs")
+            
             # Try finding operator cards/galleries instead
             cards = soup.find_all('div', class_='character-card')
             cards += soup.find_all('div', class_='operator-card')
+            cards += soup.find_all('div', class_='card')
+            
+            print(f"📦 Found {len(cards)} cards")
             
             if cards:
                 print(f"📊 Found {len(cards)} operator cards")
