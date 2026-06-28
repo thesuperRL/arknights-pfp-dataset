@@ -47,43 +47,28 @@ class ArknightsScraper:
         """Fetch page content using Playwright to bypass Cloudflare"""
         print(f"      🌐 Using browser to fetch: {url}")
         with sync_playwright() as p:
-            # Launch with stealth options to avoid detection
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    '--disable-blink-features=AutomationControlled',
-                    '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                ]
-            )
+            # Try Firefox first (sometimes bypasses Cloudflare better)
+            print(f"      🦊 Trying Firefox...")
+            browser = p.firefox.launch(headless=True)
             try:
-                context = browser.new_context(
-                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    viewport={'width': 1920, 'height': 1080},
-                )
-                page = context.new_page()
-                
-                # Add script to mask automation
-                page.add_init_script("""
-                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined})
-                """)
-                
+                page = browser.new_page()
                 page.goto(url, timeout=60000, wait_until="domcontentloaded")
                 
-                # Wait for Cloudflare challenge to complete
-                print(f"      ⏳ Waiting for Cloudflare challenge (up to 60s)...")
-                try:
-                    # Wait for a wiki-specific element to appear (means challenge passed)
-                    page.wait_for_selector('table, .mw-parser-output, #content, h1', timeout=60000)
-                    print(f"      ✅ Page loaded!")
-                except Exception as e:
-                    # If timeout, wait longer and check title
-                    print(f"      ⚠️  Selector timeout: {e}")
-                    page.wait_for_timeout(20000)
+                # Wait for Cloudflare challenge to complete by checking title change
+                print(f"      ⏳ Waiting for Cloudflare challenge to complete...")
+                max_wait = 60
+                for i in range(max_wait):
+                    page.wait_for_timeout(1000)
                     title = page.title()
-                    print(f"      📄 Page title: {title}")
-                    if 'Just a' in title or 'moment' in title:
-                        print(f"      ❌ Still on challenge page after wait")
+                    if 'Just a' not in title and 'moment' not in title and 'second' not in title:
+                        print(f"      ✅ Challenge passed after {i+1}s!")
+                        print(f"      📄 Page title: {title}")
+                        break
+                    if (i + 1) % 10 == 0:
+                        print(f"      ⏳ Still waiting... ({i+1}s)")
+                else:
+                    print(f"      ❌ Challenge did not complete after {max_wait}s")
+                    print(f"      📄 Final title: {page.title()}")
                 
                 html = page.content()
                 return html
@@ -113,9 +98,10 @@ class ArknightsScraper:
     def download_image(self, url: str, filepath: Path, retries: int = 2) -> bool:
         """Download image with retry logic using cloudscraper"""
         if not url.startswith('http'):
-            url = 'https:' + url if url.startswith('//') else urljoin('https://arknights.wiki.gg', url)
+            url = 'https:' + url if url.startsWith('//') else urljoin('https://arknights.wiki.gg', url)
         
-        print(f"      📥 Downloading: {filepath.name} from {url[:60]}...")
+        # URL is already encoded from wiki, use it as-is
+        print(f"      📥 Downloading: {filepath.name}...")
         
         for attempt in range(retries + 1):
             try:
@@ -129,15 +115,17 @@ class ArknightsScraper:
                     size_kb = len(response.content) / 1024
                     print(f"      ✅ Saved: {filepath.name} ({size_kb:.1f}KB, {elapsed}ms)")
                     return True
+                elif response.status_code == 403:
+                    # Cloudflare blocking, skip this image
+                    print(f"      ⚠️  Cloudflare blocked (403), skipping")
+                    return False
                     
             except Exception as e:
-                print(f"      ⚠️  Attempt {attempt + 1}/{retries + 1} failed: {e}")
                 if attempt < retries:
                     wait = (attempt + 1) * 1000
-                    print(f"      ⏱️  Waiting {wait}ms before retry...")
                     time.sleep(wait / 1000)
         
-        print(f"      ❌ Download failed after {retries + 1} attempts")
+        print(f"      ⚠️  Download failed, skipping")
         return False
 
     def scrape_operator_list(self) -> List[Dict]:
