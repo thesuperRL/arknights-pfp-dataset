@@ -102,35 +102,42 @@ class ArknightsScraper:
 
     def download_image(self, url: str, filepath: Path, retries: int = 2) -> bool:
         """Download image with retry logic using cloudscraper"""
+        # Fix relative URLs
         if not url.startswith('http'):
-            url = 'https:' + url if url.startswith('//') else urljoin('https://arknights.wiki.gg', url)
+            if url.startswith('//'):
+                url = 'https:' + url
+            else:
+                url = urljoin('https://arknights.wiki.gg', url)
         
-        # URL is already encoded from wiki, use it as-is
-        print(f"      📥 Downloading: {filepath.name}...")
+        print(f"        📥 URL: {url[:80]}...")
         
         for attempt in range(retries + 1):
             try:
                 start = time.time()
                 response = self.scraper.get(url, timeout=30)
                 
+                print(f"        📊 Status: {response.status_code}")
+                
                 if response.status_code == 200:
                     filepath.parent.mkdir(parents=True, exist_ok=True)
                     filepath.write_bytes(response.content)
                     elapsed = int((time.time() - start) * 1000)
                     size_kb = len(response.content) / 1024
-                    print(f"      ✅ Saved: {filepath.name} ({size_kb:.1f}KB, {elapsed}ms)")
+                    print(f"        ✅ Saved: {filepath.name} ({size_kb:.1f}KB, {elapsed}ms)")
                     return True
                 elif response.status_code == 403:
-                    # Cloudflare blocking, skip this image
-                    print(f"      ⚠️  Cloudflare blocked (403), skipping")
+                    print(f"        ⚠️  Cloudflare blocked (403)")
+                    return False
+                else:
+                    print(f"        ⚠️  HTTP {response.status_code}")
                     return False
                     
             except Exception as e:
+                print(f"        ⚠️  Error: {str(e)[:60]}")
                 if attempt < retries:
                     wait = (attempt + 1) * 1000
                     time.sleep(wait / 1000)
         
-        print(f"      ⚠️  Download failed, skipping")
         return False
 
     def scrape_operator_list(self) -> List[Dict]:
@@ -306,23 +313,36 @@ class ArknightsScraper:
                 print(f"    🎨 Processing skins for {op['name']}...")
                 op_dir = self.all_dir / op['id']
                 op_dir.mkdir(exist_ok=True)
+                print(f"      📁 Operator folder: {op_dir}")
                 
                 # Copy default skin
                 default_skin = op_dir / 'default.png'
                 if not default_skin.exists() and default_path.exists():
                     import shutil
                     shutil.copy(default_path, default_skin)
+                    print(f"      📋 Copied default skin")
+                elif default_skin.exists():
+                    print(f"      ⏭️  Default skin already exists")
                 
                 # ALWAYS scrape skins (operators may have new skins)
                 skins = self.scrape_operator_skins(op)
                 
-                # Only download skins we don't have yet
-                for skin in skins:
-                    skin_path = op_dir / skin['filename']
-                    if not skin_path.exists():
-                        self.download_image(skin['url'], skin_path)
-                    else:
-                        print(f"      ⏭️  {skin['filename']} already exists")
+                if not skins:
+                    print(f"      ℹ️  No skins found for this operator")
+                else:
+                    print(f"      📥 Attempting to download {len(skins)} skins...")
+                    # Only download skins we don't have yet
+                    downloaded = 0
+                    for skin in skins:
+                        skin_path = op_dir / skin['filename']
+                        if not skin_path.exists():
+                            print(f"      ⬇️  Downloading {skin['filename']}...")
+                            success = self.download_image(skin['url'], skin_path)
+                            if success:
+                                downloaded += 1
+                        else:
+                            print(f"      ⏭️  {skin['filename']} already exists")
+                    print(f"      ✅ Downloaded {downloaded}/{len(skins)} new skins")
             
             # Brief pause between operators
             if idx < len(operators):
